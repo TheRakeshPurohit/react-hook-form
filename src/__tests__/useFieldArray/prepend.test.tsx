@@ -1,28 +1,27 @@
 import React from 'react';
 import {
-  act as actComponent,
+  act,
   fireEvent,
   render,
+  renderHook,
   screen,
   waitFor,
 } from '@testing-library/react';
-import { act, renderHook } from '@testing-library/react-hooks';
 
 import { VALIDATION_MODE } from '../../constants';
-import * as generateId from '../../logic/generateId';
 import { Control, FieldPath } from '../../types';
 import { useController } from '../../useController';
 import { useFieldArray } from '../../useFieldArray';
 import { useForm } from '../../useForm';
+import noop from '../../utils/noop';
 
-const mockGenerateId = () => {
-  let id = 0;
-  jest.spyOn(generateId, 'default').mockImplementation(() => (id++).toString());
-};
+let i = 0;
+
+jest.mock('../../logic/generateId', () => () => String(i++));
 
 describe('prepend', () => {
   beforeEach(() => {
-    mockGenerateId();
+    i = 0;
   });
 
   it('should pre-append data into the fields', async () => {
@@ -65,37 +64,25 @@ describe('prepend', () => {
 
     render(<Component />);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'prepend' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'prepend' }));
 
-    await actComponent(async () => {
-      expect(currentFields).toEqual([{ id: '0', test: 'test' }]);
-    });
+    expect(currentFields).toEqual([{ id: '0', test: 'test' }]);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'prepend' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'prepend' }));
 
-    act(() => {
-      expect(currentFields).toEqual([
-        { id: '2', test: 'test' },
-        { id: '0', test: 'test' },
-      ]);
-    });
+    expect(currentFields).toEqual([
+      { id: '2', test: 'test' },
+      { id: '0', test: 'test' },
+    ]);
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'prependBatch' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'prependBatch' }));
 
-    act(() => {
-      expect(currentFields).toEqual([
-        { id: '5', test: 'test-batch' },
-        { id: '6', test: 'test-batch1' },
-        { id: '2', test: 'test' },
-        { id: '0', test: 'test' },
-      ]);
-    });
+    expect(currentFields).toEqual([
+      { id: '5', test: 'test-batch' },
+      { id: '6', test: 'test-batch1' },
+      { id: '2', test: 'test' },
+      { id: '0', test: 'test' },
+    ]);
   });
 
   it.each(['isDirty', 'dirtyFields'])(
@@ -189,7 +176,7 @@ describe('prepend', () => {
       errors = tempErrors;
 
       return (
-        <form onSubmit={handleSubmit(() => {})}>
+        <form onSubmit={handleSubmit(noop)}>
           {fields.map((field, i) => (
             <input
               key={field.id}
@@ -206,21 +193,21 @@ describe('prepend', () => {
 
     render(<Component />);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
 
     expect(errors.test).toBeUndefined();
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+
+    await waitFor(() => {
+      expect(errors.test).toHaveLength(1);
     });
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
 
-    expect(errors.test).toHaveLength(2);
+    await waitFor(() => {
+      expect(errors.test).toHaveLength(2);
+    });
   });
 
   it('should trigger reRender when user is watching the all field array', () => {
@@ -530,7 +517,7 @@ describe('prepend', () => {
     };
 
     const App = () => {
-      const [data, setData] = React.useState<unknown>([]);
+      const [data, setData] = React.useState<FormValues>();
       const { control, register, handleSubmit } = useForm<FormValues>({
         defaultValues: {
           test: [{ id: '1234', test: 'data' }],
@@ -568,13 +555,13 @@ describe('prepend', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'prepend' }));
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'submit' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'submit' }));
 
-    screen.getByText(
-      '{"test":[{"id":"whatever","test":"1234"},{"id":"1234","test":"data"}]}',
-    );
+    expect(
+      await screen.findByText(
+        '{"test":[{"id":"whatever","test":"1234"},{"id":"1234","test":"data"}]}',
+      ),
+    ).toBeVisible();
   });
 
   it('should not omit keyName when provided and defaultValue is empty', async () => {
@@ -586,7 +573,7 @@ describe('prepend', () => {
     };
 
     const App = () => {
-      const [data, setData] = React.useState<unknown>([]);
+      const [data, setData] = React.useState<FormValues>();
       const { control, register, handleSubmit } = useForm<FormValues>();
 
       const { fields, prepend } = useFieldArray({
@@ -620,10 +607,10 @@ describe('prepend', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'prepend' }));
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'submit' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'submit' }));
 
-    screen.getByText('{"test":[{"id":"whatever","test":"1234"}]}');
+    expect(
+      await screen.findByText('{"test":[{"id":"whatever","test":"1234"}]}'),
+    ).toBeVisible();
   });
 });

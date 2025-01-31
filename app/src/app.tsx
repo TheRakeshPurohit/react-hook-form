@@ -1,14 +1,17 @@
-import * as React from 'react';
+import React from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import AutoUnregister from './autoUnregister';
 import Basic from './basic';
 import Watch from './watch';
 import BasicSchemaValidation from './basicSchemaValidation';
+import CrossFrameForm from './crossFrameForm';
 import SetError from './setError';
+import SetFocus from './setFocus';
 import SetValue from './setValue';
 import FormState from './formState';
 import ManualRegisterForm from './manualRegisterForm';
 import DefaultValues from './defaultValues';
+import DefaultValuesAsync from './defaultValuesAsync';
 import WatchDefaultValues from './watchDefaultValues';
 import Reset from './reset';
 import TriggerValidation from './triggerValidation';
@@ -34,9 +37,13 @@ import Test from './test';
 import Welcome from './welcome';
 import { UseFormState } from './useFormState';
 import SetValueAsyncStrictMode from './setValueStrictMode';
+import { DelayError } from './delayError';
 import './style.css';
+import FormComponent from './form';
+import DisabledFields from './disabledFields';
+import ResetKeepDirty from './resetKeepDirty';
 
-const App: React.FC = () => {
+const App = () => {
   return (
     <BrowserRouter>
       <Routes>
@@ -50,6 +57,7 @@ const App: React.FC = () => {
           path="/re-validate-mode/:mode/:reValidateMode"
           element={<ReValidateMode />}
         />
+        <Route path="/crossFrameForm" element={<CrossFrameForm />} />
         <Route path="/manual-register-form" element={<ManualRegisterForm />} />
         <Route path="/watch" element={<Watch />} />
         <Route
@@ -57,6 +65,8 @@ const App: React.FC = () => {
           element={<BasicSchemaValidation />}
         />
         <Route path="/setError" element={<SetError />} />
+        <Route path="/delayError" element={<DelayError />} />
+        <Route path="/setFocus" element={<SetFocus />} />
         <Route path="/setValueWithTrigger" element={<SetValueWithTrigger />} />
         <Route path="/conditionalField" element={<ConditionalField />} />
         <Route path="/UseFieldArray/:mode" element={<UseFieldArray />} />
@@ -65,6 +75,7 @@ const App: React.FC = () => {
           element={<UseFieldArrayUnregister />}
         />
         <Route path="/reset" element={<Reset />} />
+        <Route path="/resetKeepDirty" element={<ResetKeepDirty />} />
         <Route path="/setValue" element={<SetValue />} />
         <Route
           path="/setValueAsyncStrictMode"
@@ -86,6 +97,7 @@ const App: React.FC = () => {
         />
         <Route path="/isValid/:mode/:defaultValues" element={<IsValid />} />
         <Route path="/default-values" element={<DefaultValues />} />
+        <Route path="/default-values-async" element={<DefaultValuesAsync />} />
         <Route path="/trigger-validation" element={<TriggerValidation />} />
         <Route path="/watch-default-values" element={<WatchDefaultValues />} />
         <Route path="/watch-field-array/:mode" element={<WatchFieldArray />} />
@@ -107,6 +119,8 @@ const App: React.FC = () => {
         />
         <Route path="/test" element={<Test />} />
         <Route path="/" element={<Welcome />} />
+        <Route path="/form" element={<FormComponent />} />
+        <Route path="/disabled" element={<DisabledFields />} />
       </Routes>
     </BrowserRouter>
   );

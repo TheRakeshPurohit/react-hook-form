@@ -1,8 +1,9 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { useFieldArray } from '../../useFieldArray';
 import { useForm } from '../../useForm';
+import noop from '../../utils/noop';
 
 describe('useFieldArray focus', () => {
   it('should not focus any element when shouldFocus is set to false', () => {
@@ -48,17 +49,11 @@ describe('useFieldArray focus', () => {
 
     render(<Component />);
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /append/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /append/i }));
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /insert/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /insert/i }));
 
     expect(document.activeElement).toEqual(document.body);
   });
@@ -86,7 +81,7 @@ describe('useFieldArray focus', () => {
       const { fields, insert } = useFieldArray({ control, name: 'test' });
 
       return (
-        <form onSubmit={handleSubmit(() => {})}>
+        <form onSubmit={handleSubmit(noop)}>
           {fields.map((field, index) => (
             <div key={field.id}>
               <input
@@ -102,9 +97,7 @@ describe('useFieldArray focus', () => {
 
     render(<App />);
 
-    act(() => {
-      fireEvent.click(screen.getAllByRole('button', { name: /insert/i })[0]);
-    });
+    fireEvent.click(screen.getAllByRole('button', { name: /insert/i })[0]);
 
     expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[1]);
   });
@@ -152,25 +145,15 @@ describe('useFieldArray focus', () => {
 
     render(<Component />);
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /append/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /append/i }));
 
-    act(() => {
-      expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[0]);
-    });
+    expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[0]);
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
 
-    act(() => {
-      expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[1]);
-    });
+    expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[1]);
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /insert/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /insert/i }));
 
     expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[0]);
   });
@@ -222,25 +205,15 @@ describe('useFieldArray focus', () => {
 
     render(<Component />);
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /append/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /append/i }));
 
-    act(() => {
-      expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[0]);
-    });
+    expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[0]);
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /prepend/i }));
 
-    act(() => {
-      expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[1]);
-    });
+    expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[1]);
 
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /insert/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /insert/i }));
 
     expect(document.activeElement).toEqual(screen.getAllByRole('textbox')[0]);
   });

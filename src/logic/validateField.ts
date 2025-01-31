@@ -2,21 +2,28 @@ import { INPUT_VALIDATION_RULES } from '../constants';
 import {
   Field,
   FieldError,
+  FieldValues,
   InternalFieldErrors,
+  InternalNameSet,
+  MaxType,
   Message,
+  MinType,
   NativeFieldValue,
 } from '../types';
+import get from '../utils/get';
 import isBoolean from '../utils/isBoolean';
 import isCheckBoxInput from '../utils/isCheckBoxInput';
 import isEmptyObject from '../utils/isEmptyObject';
 import isFileInput from '../utils/isFileInput';
 import isFunction from '../utils/isFunction';
+import isHTMLElement from '../utils/isHTMLElement';
 import isMessage from '../utils/isMessage';
 import isNullOrUndefined from '../utils/isNullOrUndefined';
 import isObject from '../utils/isObject';
 import isRadioInput from '../utils/isRadioInput';
 import isRegex from '../utils/isRegex';
 import isString from '../utils/isString';
+import isUndefined from '../utils/isUndefined';
 
 import appendErrors from './appendErrors';
 import getCheckboxValue from './getCheckboxValue';
@@ -24,11 +31,13 @@ import getRadioValue from './getRadioValue';
 import getValidateError from './getValidateError';
 import getValueAndMessage from './getValueAndMessage';
 
-export default async <T extends NativeFieldValue>(
+export default async <T extends FieldValues>(
   field: Field,
-  inputValue: T,
+  disabledFieldNames: InternalNameSet,
+  formValues: T,
   validateAllFieldCriteria: boolean,
   shouldUseNativeValidation?: boolean,
+  isFieldArray?: boolean,
 ): Promise<InternalFieldErrors> => {
   const {
     ref,
@@ -43,15 +52,15 @@ export default async <T extends NativeFieldValue>(
     name,
     valueAsNumber,
     mount,
-    disabled,
   } = field._f;
-  if (!mount || disabled) {
+  const inputValue: NativeFieldValue = get(formValues, name);
+  if (!mount || disabledFieldNames.has(name)) {
     return {};
   }
   const inputRef: HTMLInputElement = refs ? refs[0] : (ref as HTMLInputElement);
   const setCustomValidity = (message?: string | boolean) => {
     if (shouldUseNativeValidation && inputRef.reportValidity) {
-      inputRef.setCustomValidity(isBoolean(message) ? '' : message || ' ');
+      inputRef.setCustomValidity(isBoolean(message) ? '' : message || '');
       inputRef.reportValidity();
     }
   };
@@ -60,7 +69,10 @@ export default async <T extends NativeFieldValue>(
   const isCheckBox = isCheckBoxInput(ref);
   const isRadioOrCheckbox = isRadio || isCheckBox;
   const isEmpty =
-    ((valueAsNumber || isFileInput(ref)) && !ref.value) ||
+    ((valueAsNumber || isFileInput(ref)) &&
+      isUndefined(ref.value) &&
+      isUndefined(inputValue)) ||
+    (isHTMLElement(ref) && ref.value === '') ||
     inputValue === '' ||
     (Array.isArray(inputValue) && !inputValue.length);
   const appendErrorsCurry = appendErrors.bind(
@@ -73,8 +85,8 @@ export default async <T extends NativeFieldValue>(
     exceedMax: boolean,
     maxLengthMessage: Message,
     minLengthMessage: Message,
-    maxType = INPUT_VALIDATION_RULES.maxLength,
-    minType = INPUT_VALIDATION_RULES.minLength,
+    maxType: MaxType = INPUT_VALIDATION_RULES.maxLength,
+    minType: MinType = INPUT_VALIDATION_RULES.minLength,
   ) => {
     const message = exceedMax ? maxLengthMessage : minLengthMessage;
     error[name] = {
@@ -86,11 +98,13 @@ export default async <T extends NativeFieldValue>(
   };
 
   if (
-    required &&
-    ((!isRadioOrCheckbox && (isEmpty || isNullOrUndefined(inputValue))) ||
-      (isBoolean(inputValue) && !inputValue) ||
-      (isCheckBox && !getCheckboxValue(refs).isValid) ||
-      (isRadio && !getRadioValue(refs).isValid))
+    isFieldArray
+      ? !Array.isArray(inputValue) || !inputValue.length
+      : required &&
+        ((!isRadioOrCheckbox && (isEmpty || isNullOrUndefined(inputValue))) ||
+          (isBoolean(inputValue) && !inputValue) ||
+          (isCheckBox && !getCheckboxValue(refs).isValid) ||
+          (isRadio && !getRadioValue(refs).isValid))
   ) {
     const { value, message } = isMessage(required)
       ? { value: !!required, message: required }
@@ -116,10 +130,10 @@ export default async <T extends NativeFieldValue>(
     const maxOutput = getValueAndMessage(max);
     const minOutput = getValueAndMessage(min);
 
-    if (!isNaN(inputValue as number)) {
+    if (!isNullOrUndefined(inputValue) && !isNaN(inputValue as number)) {
       const valueNumber =
         (ref as HTMLInputElement).valueAsNumber ||
-        parseFloat(inputValue as string);
+        (inputValue ? +inputValue : inputValue);
       if (!isNullOrUndefined(maxOutput.value)) {
         exceedMax = valueNumber > maxOutput.value;
       }
@@ -129,11 +143,25 @@ export default async <T extends NativeFieldValue>(
     } else {
       const valueDate =
         (ref as HTMLInputElement).valueAsDate || new Date(inputValue as string);
-      if (isString(maxOutput.value)) {
-        exceedMax = valueDate > new Date(maxOutput.value);
+      const convertTimeToDate = (time: unknown) =>
+        new Date(new Date().toDateString() + ' ' + time);
+      const isTime = ref.type == 'time';
+      const isWeek = ref.type == 'week';
+
+      if (isString(maxOutput.value) && inputValue) {
+        exceedMax = isTime
+          ? convertTimeToDate(inputValue) > convertTimeToDate(maxOutput.value)
+          : isWeek
+            ? inputValue > maxOutput.value
+            : valueDate > new Date(maxOutput.value);
       }
-      if (isString(minOutput.value)) {
-        exceedMin = valueDate < new Date(minOutput.value);
+
+      if (isString(minOutput.value) && inputValue) {
+        exceedMin = isTime
+          ? convertTimeToDate(inputValue) < convertTimeToDate(minOutput.value)
+          : isWeek
+            ? inputValue < minOutput.value
+            : valueDate < new Date(minOutput.value);
       }
     }
 
@@ -152,15 +180,19 @@ export default async <T extends NativeFieldValue>(
     }
   }
 
-  if ((maxLength || minLength) && !isEmpty && isString(inputValue)) {
+  if (
+    (maxLength || minLength) &&
+    !isEmpty &&
+    (isString(inputValue) || (isFieldArray && Array.isArray(inputValue)))
+  ) {
     const maxLengthOutput = getValueAndMessage(maxLength);
     const minLengthOutput = getValueAndMessage(minLength);
     const exceedMax =
       !isNullOrUndefined(maxLengthOutput.value) &&
-      inputValue.length > maxLengthOutput.value;
+      inputValue.length > +maxLengthOutput.value;
     const exceedMin =
       !isNullOrUndefined(minLengthOutput.value) &&
-      inputValue.length < minLengthOutput.value;
+      inputValue.length < +minLengthOutput.value;
 
     if (exceedMax || exceedMin) {
       getMinMaxMessage(
@@ -194,7 +226,7 @@ export default async <T extends NativeFieldValue>(
 
   if (validate) {
     if (isFunction(validate)) {
-      const result = await validate(inputValue);
+      const result = await validate(inputValue, formValues);
       const validateError = getValidateError(result, inputRef);
 
       if (validateError) {
@@ -219,7 +251,7 @@ export default async <T extends NativeFieldValue>(
         }
 
         const validateError = getValidateError(
-          await validate[key](inputValue),
+          await validate[key](inputValue, formValues),
           inputRef,
           key,
         );

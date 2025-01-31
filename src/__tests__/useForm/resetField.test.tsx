@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { useForm } from '../../useForm';
 
@@ -80,15 +80,11 @@ describe('resetField', () => {
 
     fireEvent.blur(screen.getByRole('textbox'));
 
-    await waitFor(async () => {
-      screen.getByText('touched');
-    });
+    expect(await screen.findByText('touched')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button'));
 
-    await waitFor(async () => {
-      screen.getByText('noTouched');
-    });
+    expect(await screen.findByText('noTouched')).toBeVisible();
   });
 
   it('should reset input dirty field and dirty state', async () => {
@@ -128,17 +124,13 @@ describe('resetField', () => {
       },
     });
 
-    await waitFor(async () => {
-      screen.getByText('dirty');
-      screen.getByText('formDirty');
-    });
+    expect(await screen.findByText('dirty')).toBeVisible();
+    expect(screen.getByText('formDirty')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button'));
 
-    await waitFor(async () => {
-      screen.getByText('notDirty');
-      screen.getByText('formNotDirty');
-    });
+    expect(await screen.findByText('notDirty')).toBeVisible();
+    expect(screen.getByText('formNotDirty')).toBeVisible();
   });
 
   it('should reset input error field and isValid state', async () => {
@@ -173,10 +165,8 @@ describe('resetField', () => {
 
     render(<App />);
 
-    await waitFor(async () => {
-      screen.getByText('noError');
-      screen.getByText('valid');
-    });
+    expect(await screen.findByText('valid')).toBeVisible();
+    expect(screen.getByText('noError')).toBeVisible();
 
     fireEvent.change(screen.getByRole('textbox'), {
       target: {
@@ -184,17 +174,57 @@ describe('resetField', () => {
       },
     });
 
-    await waitFor(async () => {
-      screen.getByText('error');
-      screen.getByText('NotValid');
-    });
+    expect(await screen.findByText('NotValid')).toBeVisible();
+    expect(screen.getByText('error')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button'));
 
-    await waitFor(async () => {
-      screen.getByText('noError');
-      screen.getByText('valid');
-    });
+    expect(await screen.findByText('valid')).toBeVisible();
+    expect(screen.getByText('noError')).toBeVisible();
+  });
+
+  it('should reset input file to empty string only', () => {
+    const getValuesFn = jest.fn();
+
+    const App = () => {
+      const { register, resetField, getValues } = useForm({
+        defaultValues: {
+          test: '',
+        },
+      });
+
+      return (
+        <form>
+          <input type={'file'} {...register('test')} />
+          <button
+            type={'button'}
+            onClick={() => {
+              resetField('test', { defaultValue: '' });
+            }}
+          >
+            reset
+          </button>
+          <button
+            type={'button'}
+            onClick={() => {
+              getValuesFn(getValues());
+            }}
+          >
+            getValues
+          </button>
+        </form>
+      );
+    };
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'getValues' }));
+
+    expect(getValuesFn).toBeCalledWith({ test: '' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'reset' }));
+
+    expect(getValuesFn).toBeCalledWith({ test: '' });
   });
 
   describe('when provided with options', () => {
@@ -276,15 +306,11 @@ describe('resetField', () => {
 
       fireEvent.blur(screen.getByRole('textbox'));
 
-      await waitFor(async () => {
-        screen.getByText('touched');
-      });
+      expect(await screen.findByText('touched')).toBeVisible();
 
       fireEvent.click(screen.getByRole('button'));
 
-      await waitFor(async () => {
-        screen.getByText('touched');
-      });
+      expect(await screen.findByText('touched')).toBeVisible();
     });
 
     it('should keep dirty field and isDirty state', async () => {
@@ -324,17 +350,13 @@ describe('resetField', () => {
         },
       });
 
-      await waitFor(async () => {
-        screen.getByText('dirty');
-        screen.getByText('formDirty');
-      });
+      expect(await screen.findByText('dirty')).toBeVisible();
+      expect(screen.getByText('formDirty')).toBeVisible();
 
       fireEvent.click(screen.getByRole('button'));
 
-      await waitFor(async () => {
-        screen.getByText('dirty');
-        screen.getByText('formDirty');
-      });
+      expect(await screen.findByText('dirty')).toBeVisible();
+      expect(screen.getByText('formDirty')).toBeVisible();
     });
 
     it('should skip reset error field and isValid state', async () => {
@@ -369,10 +391,8 @@ describe('resetField', () => {
 
       render(<App />);
 
-      await waitFor(async () => {
-        screen.getByText('noError');
-        screen.getByText('valid');
-      });
+      expect(await screen.findByText('valid')).toBeVisible();
+      expect(screen.getByText('noError')).toBeVisible();
 
       fireEvent.change(screen.getByRole('textbox'), {
         target: {
@@ -380,17 +400,69 @@ describe('resetField', () => {
         },
       });
 
-      await waitFor(async () => {
-        screen.getByText('error');
-        screen.getByText('NotValid');
-      });
+      expect(await screen.findByText('NotValid')).toBeVisible();
+      expect(screen.getByText('error')).toBeVisible();
 
       fireEvent.click(screen.getByRole('button'));
 
-      await waitFor(async () => {
-        screen.getByText('error');
-        screen.getByText('NotValid');
+      expect(await screen.findByText('NotValid')).toBeVisible();
+      expect(screen.getByText('error')).toBeVisible();
+    });
+
+    it('should work with objects as defaultValue', async () => {
+      const App = () => {
+        const {
+          register,
+          resetField,
+          formState: { isDirty },
+        } = useForm({
+          defaultValues: {
+            nestedObjectTest: {
+              test: 'test',
+            },
+          },
+          mode: 'onChange',
+        });
+
+        return (
+          <form>
+            <input {...register('nestedObjectTest.test', { maxLength: 4 })} />
+            <p>{isDirty ? 'isDirty' : 'isNotDirty'}</p>
+            <button
+              type={'button'}
+              onClick={() => {
+                resetField('nestedObjectTest', {
+                  defaultValue: { test: 'test2' },
+                });
+              }}
+            >
+              reset
+            </button>
+          </form>
+        );
+      };
+
+      render(<App />);
+
+      expect(await screen.findByText('isNotDirty')).toBeVisible();
+
+      fireEvent.change(screen.getByRole('textbox'), {
+        target: {
+          value: 'abcd',
+        },
       });
+
+      expect(await screen.findByText('isDirty')).toBeVisible();
+
+      fireEvent.click(screen.getByRole('button'));
+
+      fireEvent.change(screen.getByRole('textbox'), {
+        target: {
+          value: '1234',
+        },
+      });
+
+      expect(await screen.findByText('isDirty')).toBeVisible();
     });
   });
 });

@@ -8,23 +8,30 @@ export type FieldName<TFieldValues extends FieldValues> =
     ? Extract<keyof TFieldValues, string>
     : string;
 
-export type CustomElement<TFieldValues extends FieldValues> = {
-  name: FieldName<TFieldValues>;
-  type?: string;
-  value?: any;
-  disabled?: boolean;
-  checked?: boolean;
-  options?: HTMLOptionsCollection;
-  files?: FileList | null;
-  focus?: Noop;
-};
+export type CustomElement<TFieldValues extends FieldValues> =
+  Partial<HTMLElement> & {
+    name: FieldName<TFieldValues>;
+    type?: string;
+    value?: any;
+    disabled?: boolean;
+    checked?: boolean;
+    options?: HTMLOptionsCollection;
+    files?: FileList | null;
+    focus?: Noop;
+  };
 
 export type FieldValue<TFieldValues extends FieldValues> =
   TFieldValues[InternalFieldName];
 
 export type FieldValues = Record<string, any>;
 
-export type NativeFieldValue = string | number | boolean | null | undefined;
+export type NativeFieldValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | unknown[];
 
 export type FieldElement<TFieldValues extends FieldValues = FieldValues> =
   | HTMLInputElement
@@ -43,4 +50,6 @@ export type Field = {
   } & RegisterOptions;
 };
 
-export type FieldRefs = Partial<Record<InternalFieldName, Field>>;
+export type FieldRefs = Partial<{
+  [key: InternalFieldName]: Field | FieldRefs;
+}>;

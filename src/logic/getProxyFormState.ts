@@ -1,29 +1,28 @@
 import { VALIDATION_MODE } from '../constants';
-import { FormState, FormStateProxy, ReadFormState } from '../types';
+import { Control, FieldValues, FormState, ReadFormState } from '../types';
 
-export default <TFieldValues>(
+export default <TFieldValues extends FieldValues, TContext = any>(
   formState: FormState<TFieldValues>,
-  _proxyFormState: ReadFormState,
+  control: Control<TFieldValues, TContext>,
   localProxyFormState?: ReadFormState,
   isRoot = true,
 ) => {
-  function createGetter(prop: keyof FormStateProxy) {
-    return () => {
-      if (prop in formState) {
-        if (_proxyFormState[prop] !== VALIDATION_MODE.all) {
-          _proxyFormState[prop] = !isRoot || VALIDATION_MODE.all;
-        }
-        localProxyFormState && (localProxyFormState[prop] = true);
-        return formState[prop];
-      }
-      return undefined;
-    };
-  }
+  const result = {
+    defaultValues: control._defaultValues,
+  } as typeof formState;
 
-  const result = {} as any as typeof formState;
   for (const key in formState) {
     Object.defineProperty(result, key, {
-      get: createGetter(key as keyof FormStateProxy),
+      get: () => {
+        const _key = key as keyof FormState<TFieldValues> & keyof ReadFormState;
+
+        if (control._proxyFormState[_key] !== VALIDATION_MODE.all) {
+          control._proxyFormState[_key] = !isRoot || VALIDATION_MODE.all;
+        }
+
+        localProxyFormState && (localProxyFormState[_key] = true);
+        return formState[_key];
+      },
     });
   }
 

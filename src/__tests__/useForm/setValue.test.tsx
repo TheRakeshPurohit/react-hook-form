@@ -1,20 +1,22 @@
 import React from 'react';
 import {
-  act as actComponent,
+  act,
   fireEvent,
   render,
+  renderHook,
   screen,
   waitFor,
 } from '@testing-library/react';
-import { act, renderHook } from '@testing-library/react-hooks';
 
 import { VALIDATION_MODE } from '../../constants';
 import { Controller } from '../../controller';
-import { Control, NestedValue } from '../../types';
+import { Control } from '../../types';
 import { useFieldArray } from '../../useFieldArray';
 import { useForm } from '../../useForm';
 import get from '../../utils/get';
 import isFunction from '../../utils/isFunction';
+import noop from '../../utils/noop';
+import sleep from '../../utils/sleep';
 
 jest.useFakeTimers();
 
@@ -45,7 +47,9 @@ describe('setValue', () => {
 
     expect(elm).not.toHaveValue();
 
-    result.current.setValue('test', undefined);
+    act(() => {
+      result.current.unregister('test');
+    });
 
     expect(elm).not.toHaveValue();
   });
@@ -63,8 +67,8 @@ describe('setValue', () => {
           test: '1',
         });
       })({
-        preventDefault: () => {},
-        persist: () => {},
+        preventDefault: noop,
+        persist: noop,
       } as React.SyntheticEvent);
     });
   });
@@ -74,14 +78,12 @@ describe('setValue', () => {
 
     result.current.register('test');
 
-    const blob = new Blob([''], { type: 'image/png', lastModified: 1 } as any);
-    const file = blob as File;
+    const file = new File([''], '', { type: 'image/png', lastModified: 1 });
     const fileList = {
       0: file,
       1: file,
       length: 2,
-      item: () => file,
-    } as any as FileList;
+    } as unknown as FileList;
 
     act(() => result.current.setValue('test', fileList));
 
@@ -91,8 +93,8 @@ describe('setValue', () => {
           test: fileList,
         });
       })({
-        preventDefault: () => {},
-        persist: () => {},
+        preventDefault: noop,
+        persist: noop,
       } as React.SyntheticEvent);
     });
   });
@@ -129,8 +131,8 @@ describe('setValue', () => {
           test: ['1'],
         });
       })({
-        preventDefault: () => {},
-        persist: () => {},
+        preventDefault: noop,
+        persist: noop,
       } as React.SyntheticEvent);
     });
   });
@@ -148,8 +150,83 @@ describe('setValue', () => {
           test: '1',
         });
       })({
-        preventDefault: () => {},
-        persist: () => {},
+        preventDefault: noop,
+        persist: noop,
+      } as React.SyntheticEvent);
+    });
+  });
+
+  it('should set value of multiple checkbox input correctly as a child', async () => {
+    const { result } = renderHook(() =>
+      useForm<{ parent: { test: string[] } }>(),
+    );
+
+    const { ref } = result.current.register('parent.test');
+
+    const elm = document.createElement('input');
+    elm.type = 'checkbox';
+    elm.name = 'test';
+    elm.value = '2';
+
+    document.body.append(elm);
+    isFunction(ref) && ref(elm);
+
+    const { ref: ref1 } = result.current.register('parent.test');
+
+    const elm1 = document.createElement('input');
+    elm1.type = 'checkbox';
+    elm1.name = 'test';
+    elm1.value = '1';
+
+    document.body.append(elm1);
+
+    isFunction(ref1) && ref1(elm1);
+
+    result.current.setValue('parent', { test: ['1'] });
+    expect(elm1).toBeChecked();
+
+    await act(async () => {
+      await result.current.handleSubmit((data) => {
+        expect(data).toEqual({
+          parent: {
+            test: ['1'],
+          },
+        });
+      })({
+        preventDefault: noop,
+        persist: noop,
+      } as React.SyntheticEvent);
+    });
+  });
+
+  it('should set value of single checkbox input correctly as a child', async () => {
+    const { result } = renderHook(() =>
+      useForm<{ parent: { test: string } }>(),
+    );
+
+    const { ref } = result.current.register('parent.test');
+
+    const elm = document.createElement('input');
+    elm.type = 'checkbox';
+    elm.name = 'test';
+    elm.value = '1';
+
+    document.body.append(elm);
+    isFunction(ref) && ref(elm);
+
+    result.current.setValue('parent', { test: '1' });
+    expect(elm).toBeChecked();
+
+    await act(async () => {
+      await result.current.handleSubmit((data) => {
+        expect(data).toEqual({
+          parent: {
+            test: '1',
+          },
+        });
+      })({
+        preventDefault: noop,
+        persist: noop,
       } as React.SyntheticEvent);
     });
   });
@@ -172,8 +249,8 @@ describe('setValue', () => {
           test: ['1'],
         });
       })({
-        preventDefault: () => {},
-        persist: () => {},
+        preventDefault: noop,
+        persist: noop,
       } as React.SyntheticEvent);
     });
   });
@@ -280,17 +357,15 @@ describe('setValue', () => {
   it('should set nested value correctly ', () => {
     const { result } = renderHook(() =>
       useForm<{
-        test1: NestedValue<string[]>;
-        test2: NestedValue<{
+        test1: string[];
+        test2: {
           key1: string;
           key2: number;
-        }>;
-        test3: NestedValue<
-          {
-            key1: string;
-            key2: number;
-          }[]
-        >;
+        };
+        test3: {
+          key1: string;
+          key2: number;
+        }[];
       }>(),
     );
 
@@ -545,7 +620,11 @@ describe('setValue', () => {
           setError,
           setValue,
           formState: { errors },
-        } = useForm();
+        } = useForm({
+          defaultValues: {
+            test: '',
+          },
+        });
 
         return (
           <>
@@ -575,15 +654,13 @@ describe('setValue', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'setError' }));
 
-      await waitFor(() => {
-        screen.getByText('test');
-      });
+      expect(await screen.findByText('test')).toBeVisible();
 
-      await actComponent(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'update' }));
-      });
+      fireEvent.click(screen.getByRole('button', { name: 'update' }));
 
-      expect(screen.queryByText('test')).toBeNull();
+      await waitFor(() =>
+        expect(screen.queryByText('test')).not.toBeInTheDocument(),
+      );
     });
 
     it('should not be called trigger method if options is empty', async () => {
@@ -815,16 +892,12 @@ describe('setValue', () => {
 
       fireEvent.click(screen.getByRole('button'));
 
-      screen.getByText('test');
+      expect(screen.getByText('test')).toBeVisible();
     });
   });
 
   describe('with strict mode', () => {
     it('should be able to set input value async', async () => {
-      function sleep(ms: number) {
-        return new Promise((resolve) => setTimeout(resolve, ms));
-      }
-
       function App() {
         const { control, setValue } = useForm();
 
@@ -860,18 +933,14 @@ describe('setValue', () => {
         </React.StrictMode>,
       );
 
-      actComponent(() => {
-        jest.advanceTimersByTime(10000);
-      });
+      jest.advanceTimersByTime(10000);
 
-      await waitFor(async () => {
-        screen.getByText('test');
-      });
+      expect(await screen.findByText('test')).toBeVisible();
     });
   });
 
   it('should set hidden input value correctly and reflect on the submission data', async () => {
-    let submitData = undefined;
+    let submitData: Record<string, string> | undefined = undefined;
 
     const Component = () => {
       const { register, handleSubmit, setValue } = useForm<{
@@ -901,17 +970,15 @@ describe('setValue', () => {
 
     render(<Component />);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'change' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'change' }));
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'submit' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'submit' }));
 
-    expect(submitData).toEqual({
-      test: 'changed',
-    });
+    await waitFor(() =>
+      expect(submitData).toEqual({
+        test: 'changed',
+      }),
+    );
   });
 
   it('should validate the input and return correct isValid formState', async () => {
@@ -948,7 +1015,7 @@ describe('setValue', () => {
   });
 
   it('should setValue with valueAs', async () => {
-    let result;
+    let result: Record<string, string>;
 
     function App() {
       const { register, handleSubmit, setValue } = useForm();
@@ -974,13 +1041,13 @@ describe('setValue', () => {
 
     render(<App />);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
+    fireEvent.click(screen.getByRole('button'));
 
-    expect(result).toEqual({
-      setStringDate: new Date('2021-04-23'),
-    });
+    await waitFor(() =>
+      expect(result).toEqual({
+        setStringDate: new Date('2021-04-23'),
+      }),
+    );
   });
 
   it('should set value for field array name correctly', () => {
@@ -1079,13 +1146,9 @@ describe('setValue', () => {
 
     render(<App />);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
+    fireEvent.click(screen.getByRole('button'));
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
+    fireEvent.click(screen.getByRole('button'));
 
     expect(fieldsValue.length).toEqual(1);
   });
@@ -1133,11 +1196,23 @@ describe('setValue', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'setValue' }));
 
-    expect(fields).toMatchSnapshot();
+    expect(fields).toEqual({});
 
     fireEvent.click(screen.getByRole('button', { name: 'getValues' }));
 
-    expect(data).toMatchSnapshot();
+    expect(data).toEqual({
+      test: [
+        {
+          name: 'append',
+          nestedArray: [
+            {
+              field1: 'append',
+              field2: 'append',
+            },
+          ],
+        },
+      ],
+    });
   });
 
   describe('when set field to null', () => {
@@ -1172,9 +1247,7 @@ describe('setValue', () => {
 
       render(<App />);
 
-      actComponent(() => {
-        fireEvent.click(screen.getByRole('button'));
-      });
+      fireEvent.click(screen.getByRole('button'));
 
       expect(result).toEqual({
         user: null,
@@ -1210,9 +1283,7 @@ describe('setValue', () => {
 
       render(<App />);
 
-      actComponent(() => {
-        fireEvent.click(screen.getByRole('button'));
-      });
+      fireEvent.click(screen.getByRole('button'));
 
       expect(result).toEqual({
         user: null,
@@ -1239,14 +1310,18 @@ describe('setValue', () => {
 
     render(<App />);
 
-    await waitFor(async () => {
-      screen.getByText('["2","2"]');
-    });
+    expect(await screen.findByText('["2","2"]')).toBeVisible();
   });
 
   it('should only be able to update value of object which is not registered', async () => {
     const App = () => {
-      const { setValue, watch } = useForm({
+      const { setValue, watch } = useForm<{
+        test: {
+          data: string;
+          data1: string;
+          data2: string;
+        };
+      }>({
         defaultValues: {
           test: {
             data: '1',
@@ -1258,7 +1333,9 @@ describe('setValue', () => {
       React.useEffect(() => {
         setValue('test', {
           data: '2',
-        } as any);
+          data1: '2',
+          data2: '3',
+        });
       }, [setValue]);
 
       const result = watch('test');
@@ -1268,12 +1345,12 @@ describe('setValue', () => {
 
     render(<App />);
 
-    await waitFor(async () => {
-      screen.getByText('{"data":"2"}');
-    });
+    expect(
+      await screen.findByText('{"data":"2","data1":"2","data2":"3"}'),
+    ).toBeVisible();
   });
 
-  it('should update nested object which contain date object without register', async () => {
+  it('should update nested object which contain date object without register', () => {
     const watchedValue: unknown[] = [];
     const defaultValues = {
       userData: {
@@ -1309,11 +1386,18 @@ describe('setValue', () => {
 
     render(<App />);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
+    fireEvent.click(screen.getByRole('button'));
 
-    expect(watchedValue).toMatchSnapshot();
+    expect(watchedValue).toEqual([
+      {
+        date: new Date('2021-06-15T00:00:00.000Z'),
+        userId: 'abc',
+      },
+      {
+        date: new Date('2021-12-17T00:00:00.000Z'),
+        userId: '1234',
+      },
+    ]);
   });
 
   it('should update isDirty even input is not registered', async () => {
@@ -1336,9 +1420,7 @@ describe('setValue', () => {
 
     render(<App />);
 
-    await waitFor(() => {
-      screen.getByText('dirty');
-    });
+    expect(await screen.findByText('dirty')).toBeVisible();
   });
 
   it('should update both dirty and touched state', () => {
@@ -1380,7 +1462,7 @@ describe('setValue', () => {
 
     fireEvent.click(screen.getByRole('button'));
 
-    screen.getByText('dirty');
-    screen.getByText('touched');
+    expect(screen.getByText('dirty')).toBeVisible();
+    expect(screen.getByText('touched')).toBeVisible();
   });
 });

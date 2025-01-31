@@ -9,11 +9,13 @@ export default <T extends NativeFieldValue>(
   isUndefined(value)
     ? value
     : valueAsNumber
-    ? value === ''
-      ? NaN
-      : +value
-    : valueAsDate && isString(value)
-    ? new Date(value)
-    : setValueAs
-    ? setValueAs(value)
-    : value;
+      ? value === ''
+        ? NaN
+        : value
+          ? +value
+          : value
+      : valueAsDate && isString(value)
+        ? new Date(value)
+        : setValueAs
+          ? setValueAs(value)
+          : value;

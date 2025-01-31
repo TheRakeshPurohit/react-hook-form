@@ -1,17 +1,19 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
-  act as actComponent,
+  act,
   fireEvent,
   render,
+  renderHook,
   screen,
-  waitFor,
 } from '@testing-library/react';
-import { act, renderHook } from '@testing-library/react-hooks';
 
 import { Controller } from '../../controller';
+import { Control, FieldValues } from '../../types';
 import { useFieldArray } from '../../useFieldArray';
 import { useForm } from '../../useForm';
+import { useWatch } from '../../useWatch';
 import isFunction from '../../utils/isFunction';
+import noop from '../../utils/noop';
 
 describe('watch', () => {
   it('should return undefined when input gets unregister', async () => {
@@ -38,13 +40,11 @@ describe('watch', () => {
       },
     });
 
-    screen.getByText('test');
+    expect(screen.getByText('test')).toBeVisible();
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
+    fireEvent.click(screen.getByRole('button'));
 
-    expect(screen.queryByText('test')).toBeNull();
+    expect(screen.queryByText('test')).not.toBeInTheDocument();
   });
 
   it('should watch individual input', async () => {
@@ -266,7 +266,7 @@ describe('watch', () => {
     ]);
   });
 
-  it('should watch correctly with useFieldArray with action and then fallback to onChange', async () => {
+  it('should watch correctly with useFieldArray with action and then fallback to onChange', () => {
     type FormValues = {
       names: {
         name: string;
@@ -293,7 +293,7 @@ describe('watch', () => {
       output.push(watch());
 
       return (
-        <form onSubmit={handleSubmit(() => {})}>
+        <form onSubmit={handleSubmit(noop)}>
           {fields.map((item, index) => {
             return (
               <div key={item.id}>
@@ -314,30 +314,40 @@ describe('watch', () => {
 
     render(<Component />);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button'));
+    expect(output.at(-1)).toEqual({
+      names: [],
     });
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button'));
+    const appendButton = screen.getByRole('button');
+
+    fireEvent.click(appendButton);
+
+    fireEvent.click(appendButton);
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], {
+      target: { value: '123' },
     });
 
-    await actComponent(async () => {
-      fireEvent.change(screen.getAllByRole('textbox')[0], {
-        target: { value: '123' },
-      });
+    expect(output.at(-1)).toEqual({
+      names: [
+        {
+          name: '123',
+        },
+        {
+          name: 'test',
+        },
+      ],
     });
 
-    await actComponent(async () => {
-      fireEvent.change(screen.getAllByRole('textbox')[1], {
-        target: { value: '456' },
-      });
+    fireEvent.change(screen.getAllByRole('textbox')[1], {
+      target: { value: '456' },
     });
 
+    // Let's check all values of renders with implicitly the number of render (for each value)
     expect(output).toMatchSnapshot();
   });
 
-  it('should have dirty marked when watch is enabled', () => {
+  it('should have dirty marked when watch is enabled', async () => {
     function Component() {
       const {
         register,
@@ -360,23 +370,19 @@ describe('watch', () => {
 
     render(<Component />);
 
-    screen.getByText('False');
+    expect(screen.getByText('False')).toBeVisible();
 
-    actComponent(() => {
-      fireEvent.change(screen.getByRole('textbox'), {
-        target: { value: 'test' },
-      });
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'test' },
     });
 
-    screen.getByText('True');
+    expect(screen.getByText('True')).toBeVisible();
 
-    actComponent(() => {
-      fireEvent.change(screen.getByRole('textbox'), {
-        target: { value: '' },
-      });
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: '' },
     });
 
-    screen.getByText('False');
+    expect(await screen.findByText('False')).toBeVisible();
   });
 
   it('should return deeply nested field values with defaultValues', async () => {
@@ -404,12 +410,10 @@ describe('watch', () => {
 
     render(<App />);
 
-    await act(async () => {
-      fireEvent.change(screen.getByRole('textbox'), {
-        target: {
-          value: '1234',
-        },
-      });
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: {
+        value: '1234',
+      },
     });
 
     expect(data).toEqual({
@@ -446,15 +450,33 @@ describe('watch', () => {
 
     render(<App />);
 
+    expect(watched).toEqual([{}]);
+
     fireEvent.change(screen.getByRole('textbox'), {
       target: {
         value: '1',
       },
     });
 
+    expect(watched).toEqual([
+      {},
+      {
+        test: '1',
+      },
+    ]);
+
     fireEvent.click(screen.getByRole('button'));
 
-    expect(watched).toMatchSnapshot();
+    expect(watched).toEqual([
+      {},
+      {
+        test: '1',
+      },
+      {
+        test: '1',
+      },
+      {},
+    ]);
   });
 
   it('should flush additional render for shouldUnregister: true', async () => {
@@ -486,10 +508,98 @@ describe('watch', () => {
 
     render(<App />);
 
-    await waitFor(async () => {
-      screen.getByText('1234');
-    });
+    expect(await screen.findByText('1234')).toBeVisible();
 
     expect(watchedData).toEqual([{}, {}, { test: '1234' }]);
+  });
+
+  it('should not be able to overwrite global watch state', () => {
+    function Watcher<T extends FieldValues>({
+      control,
+    }: {
+      control: Control<T>;
+    }) {
+      useWatch({
+        control,
+      });
+      return null;
+    }
+
+    function App() {
+      const { register, watch, control } = useForm({
+        defaultValues: {
+          firstName: '',
+        },
+      });
+      const { firstName } = watch();
+
+      return (
+        <form>
+          <p>{firstName}</p>
+          <Watcher control={control} />
+          <input {...register('firstName')} />
+        </form>
+      );
+    }
+
+    render(<App />);
+
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: {
+        value: 'bill',
+      },
+    });
+
+    screen.getByText('bill');
+  });
+
+  it('should call the callback on every append', () => {
+    interface FormValues {
+      names: {
+        firstName: string;
+      }[];
+    }
+    const mockedFn = jest.fn();
+
+    function App() {
+      const { watch, control } = useForm<FormValues>({
+        defaultValues: { names: [] },
+      });
+
+      const { fields, append } = useFieldArray({
+        control,
+        name: 'names',
+      });
+
+      useEffect(() => {
+        const subscription = watch((_value, { name }) => {
+          mockedFn(name, _value);
+        });
+
+        return () => {
+          subscription.unsubscribe();
+        };
+      }, [watch]);
+
+      const addItem = (index: number) => {
+        append({ firstName: '' }, { focusName: `names.${index}.firstName` });
+      };
+
+      return (
+        <form>
+          <button type="button" onClick={() => addItem(fields.length)}>
+            append
+          </button>
+        </form>
+      );
+    }
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button'));
+    expect(mockedFn).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole('button'));
+    expect(mockedFn).toHaveBeenCalledTimes(4);
   });
 });

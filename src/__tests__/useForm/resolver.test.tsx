@@ -1,16 +1,12 @@
 import React from 'react';
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { useForm } from '../../useForm';
+import noop from '../../utils/noop';
+import sleep from '../../utils/sleep';
 
 describe('resolver', () => {
-  it('should update context within the resolver', () => {
+  it('should update context within the resolver', async () => {
     type FormValues = {
       test: string;
     };
@@ -51,7 +47,9 @@ describe('resolver', () => {
     });
     fireEvent.click(screen.getByRole('button'));
 
-    screen.findByText("{test:'test'}");
+    expect(
+      await screen.findByText('{"test":"test"}', undefined, { timeout: 3000 }),
+    ).toBeVisible();
   });
 
   it('should support resolver schema switching', async () => {
@@ -104,25 +102,15 @@ describe('resolver', () => {
 
     render(<App />);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
 
-    await waitFor(async () => {
-      screen.getByText('Error');
-    });
+    expect(await screen.findByText('Error')).toBeVisible();
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Toggle' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle' }));
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
 
-    await waitFor(async () => {
-      screen.getByText('Submitted');
-    });
+    expect(await screen.findByText('Submitted')).toBeVisible();
   });
 
   it('should be called with the shouldUseNativeValidation option to true', async () => {
@@ -143,7 +131,7 @@ describe('resolver', () => {
       });
 
       return (
-        <form onSubmit={handleSubmit(() => {})}>
+        <form onSubmit={handleSubmit(noop)}>
           <input {...register('test')} />
           <button>Submit</button>
         </form>
@@ -152,12 +140,78 @@ describe('resolver', () => {
 
     render(<App />);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
+    fireEvent.click(screen.getByRole('button'));
 
     expect(test.mock.calls[0][2]).toEqual(
       expect.objectContaining({ shouldUseNativeValidation: true }),
     );
+  });
+
+  it('should avoid the problem of race condition', async () => {
+    jest.useFakeTimers();
+
+    const test = jest.fn();
+    let errorsObject = {};
+
+    const resolver = async (a: any, b: any, c: any) => {
+      test(a, b, c);
+
+      if (a.test !== 'OK') {
+        await sleep(100);
+        return {
+          errors: {
+            test: {
+              type: 'test',
+              value: { message: 'wrong', type: 'test' },
+            },
+          },
+          values: {},
+        };
+      }
+
+      return {
+        errors: {},
+        values: { test: a.test },
+      };
+    };
+
+    const App = () => {
+      const {
+        register,
+        formState: { errors },
+      } = useForm({
+        resolver,
+        mode: 'onChange',
+      });
+      errorsObject = errors;
+
+      return (
+        <form>
+          <input type="text" {...register('test')} />
+        </form>
+      );
+    };
+
+    render(<App />);
+
+    const inputElm = screen.getByRole('textbox');
+
+    fireEvent.change(inputElm, {
+      target: {
+        value: 'O',
+      },
+    });
+
+    fireEvent.change(inputElm, {
+      target: {
+        value: 'OK',
+      },
+    });
+
+    await act(async () => {
+      jest.advanceTimersByTime(200);
+    });
+
+    expect(errorsObject).toEqual({});
   });
 });
