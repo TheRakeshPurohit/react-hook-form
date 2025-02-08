@@ -4,7 +4,6 @@ const jestDefaultConfig = {
   restoreMocks: true,
   rootDir: '.',
   roots: ['<rootDir>/src'],
-  preset: 'ts-jest',
   transformIgnorePatterns: ['[/\\\\]node_modules[/\\\\].+\\.(js|jsx)$'],
 };
 
@@ -15,8 +14,17 @@ const web = {
     color: 'cyan',
   },
   testMatch: ['**/__tests__/**/*.(spec|test).ts?(x)'],
+  transform: {
+    '^.+\\.tsx?$': '@swc/jest',
+    '^.+\\.(css|scss|sass)$': 'jest-preview/transforms/css',
+    '^(?!.*\\.(js|jsx|mjs|cjs|ts|tsx|css|json)$)':
+      'jest-preview/transforms/file',
+  },
   setupFilesAfterEnv: ['<rootDir>/scripts/jest/setup.ts'],
-  testEnvironment: 'jsdom',
+  testEnvironment: 'jest-fixed-jsdom',
+  testEnvironmentOptions: {
+    customExportConditions: [''],
+  },
 };
 
 const server = {
@@ -26,31 +34,16 @@ const server = {
     color: 'blue',
   },
   testMatch: ['**/+([a-zA-Z]).server.(spec|test).ts?(x)'],
-  testEnvironment: 'node',
-};
-
-const native = {
-  ...jestDefaultConfig,
-  displayName: {
-    name: 'React Native',
-    color: 'magenta',
-  },
-  preset: 'react-native',
-  testMatch: ['**/+([a-zA-Z]).native.(spec|test).ts?(x)'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
-    '^.+\\.jsx?$': '<rootDir>/node_modules/react-native/jest/preprocessor.js',
+    '^.+\\.tsx?$': '@swc/jest',
   },
-  transformIgnorePatterns: [
-    '[/\\\\]node_modules[/\\\\](?!(@react-native|react-native)[/\\\\])',
-  ],
-  setupFilesAfterEnv: ['<rootDir>/scripts/jest/setup.native.ts'],
+  testEnvironment: 'node',
 };
 
 const getProjects = () => {
   const testEnv = process.env.TEST_ENV;
   if (!testEnv) {
-    return [web, server, native];
+    return [web, server];
   }
 
   switch (testEnv) {
@@ -58,8 +51,6 @@ const getProjects = () => {
       return [web];
     case 'server':
       return [server];
-    case 'native':
-      return [native];
   }
 };
 
@@ -70,6 +61,7 @@ module.exports = {
     '!**/src/types/**',
     '!**/node_modules/**',
     '!**/dist/**',
+    '!**/__tests__/**',
   ],
   projects: getProjects(),
 };

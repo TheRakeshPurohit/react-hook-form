@@ -11,11 +11,11 @@ export default <T extends ValidationValue>(
   rule?: ValidationRule<T> | ValidationValueMessage<T>,
 ) =>
   isUndefined(rule)
-    ? undefined
+    ? rule
     : isRegex(rule)
-    ? rule.source
-    : isObject(rule)
-    ? isRegex(rule.value)
-      ? rule.value.source
-      : rule.value
-    : rule;
+      ? rule.source
+      : isObject(rule)
+        ? isRegex(rule.value)
+          ? rule.value.source
+          : rule.value
+        : rule;

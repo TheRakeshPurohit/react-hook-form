@@ -54,7 +54,7 @@ const items: Item[] = [
   {
     title: 'DefaultValues',
     description: 'Should populate defaultValue for inputs',
-    slugs: ['/default-values'],
+    slugs: ['/default-values', '/default-values-async'],
   },
   {
     title: 'FormState',
@@ -99,7 +99,7 @@ const items: Item[] = [
   {
     title: 'Reset',
     description: 'Should be able to re-populate the form while reset',
-    slugs: ['/rest'],
+    slugs: ['/reset', '/resetKeepDirty'],
   },
   {
     title: 'ReValidateMode',
@@ -117,6 +117,16 @@ const items: Item[] = [
     title: 'SetError',
     description: 'Form setError',
     slugs: ['/setError'],
+  },
+  {
+    title: 'DelayError',
+    description: 'Form showing delay error',
+    slugs: ['/delayError'],
+  },
+  {
+    title: 'setFocus',
+    description: 'Form setFocus',
+    slugs: ['/setFocus'],
   },
   {
     title: 'SetValue',
@@ -200,13 +210,23 @@ const items: Item[] = [
   },
   {
     title: 'WatchUseFieldArray',
-    description: 'should behaviour correctly when watching the field array',
+    description: 'Should behave correctly when watching the field array',
     slugs: ['/watch-field-array/normal', '/watch-field-array/default'],
   },
   {
     title: 'WatchUseFieldArrayNested',
-    description: 'should watch the correct nested field array',
+    description: 'Should watch the correct nested field array',
     slugs: ['/watchUseFieldArrayNested'],
+  },
+  {
+    title: 'Form',
+    description: 'Should validate form and submit the request',
+    slugs: ['/form'],
+  },
+  {
+    title: 'Disabled',
+    description: 'Should behave correctly when disabling form or fields',
+    slugs: ['/disabled'],
   },
 ];
 

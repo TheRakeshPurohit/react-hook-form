@@ -8,13 +8,13 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Install deps and build (with cache)
-        uses: bahmutov/npm-install@v1
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
 
       - name: Build
-        run: yarn build:esm
+        run: pnpm build:esm
 
       - name: API Extractor
-        run: yarn api-extractor:ci
+        run: pnpm api-extractor:ci

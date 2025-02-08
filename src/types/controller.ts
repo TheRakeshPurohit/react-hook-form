@@ -9,7 +9,6 @@ import {
   FieldValues,
   Noop,
   RefCallBack,
-  UnpackNestedValue,
   UseFormStateReturn,
 } from './';
 
@@ -17,6 +16,7 @@ export type ControllerFieldState = {
   invalid: boolean;
   isTouched: boolean;
   isDirty: boolean;
+  isValidating: boolean;
   error?: FieldError;
 };
 
@@ -26,7 +26,8 @@ export type ControllerRenderProps<
 > = {
   onChange: (...event: any[]) => void;
   onBlur: Noop;
-  value: UnpackNestedValue<FieldPathValue<TFieldValues, TName>>;
+  value: FieldPathValue<TFieldValues, TName>;
+  disabled?: boolean;
   name: TName;
   ref: RefCallBack;
 };
@@ -41,8 +42,9 @@ export type UseControllerProps<
     'valueAsNumber' | 'valueAsDate' | 'setValueAs' | 'disabled'
   >;
   shouldUnregister?: boolean;
-  defaultValue?: UnpackNestedValue<FieldPathValue<TFieldValues, TName>>;
+  defaultValue?: FieldPathValue<TFieldValues, TName>;
   control?: Control<TFieldValues>;
+  disabled?: boolean;
 };
 
 export type UseControllerReturn<
@@ -54,6 +56,27 @@ export type UseControllerReturn<
   fieldState: ControllerFieldState;
 };
 
+/**
+ * Render function to provide the control for the field.
+ *
+ * @returns all the event handlers, and relevant field and form state.
+ *
+ * @example
+ * ```tsx
+ * const { field, fieldState, formState } = useController();
+ *
+ * <Controller
+ *   render={({ field, formState, fieldState }) => ({
+ *     <input
+ *       onChange={field.onChange}
+ *       onBlur={field.onBlur}
+ *       name={field.name}
+ *       ref={field.ref} // optional for focus management
+ *     />
+ *   })}
+ * />
+ * ```
+ */
 export type ControllerProps<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,

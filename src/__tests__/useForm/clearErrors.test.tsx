@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  act as actComponent,
+  act,
   fireEvent,
   render,
+  renderHook,
   screen,
   waitFor,
 } from '@testing-library/react';
-import { act, renderHook } from '@testing-library/react-hooks';
 
 import { useForm } from '../../useForm';
 
@@ -68,19 +68,23 @@ describe('clearErrors', () => {
       );
     };
 
-    await actComponent(async () => {
-      render(<Component />);
-    });
+    render(<Component />);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'submit' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'submit' }));
 
-    expect(currentErrors).toMatchSnapshot();
+    await waitFor(() =>
+      expect(currentErrors).toEqual({
+        test: {
+          data: {
+            message: '',
+            ref: screen.getByRole('textbox'),
+            type: 'required',
+          },
+        },
+      }),
+    );
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'clear' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }));
 
     expect(currentErrors).toEqual({});
   });
@@ -254,20 +258,29 @@ describe('clearErrors', () => {
 
     render(<App />);
 
-    await waitFor(() => {
-      screen.getByText('yes');
-    });
+    expect(await screen.findByText('yes')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'setError' }));
 
-    await waitFor(() => {
-      screen.getByText('no');
-    });
+    expect(await screen.findByText('no')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'clearError' }));
 
-    await waitFor(() => {
-      screen.getByText('no');
-    });
+    expect(await screen.findByText('no')).toBeVisible();
+  });
+
+  it('should be able to clear root error', () => {
+    const App = () => {
+      const { clearErrors } = useForm();
+
+      React.useEffect(() => {
+        clearErrors('root');
+        clearErrors('root.other');
+      }, [clearErrors]);
+
+      return null;
+    };
+
+    render(<App />);
   });
 });

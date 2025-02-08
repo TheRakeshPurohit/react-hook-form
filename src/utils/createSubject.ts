@@ -14,12 +14,12 @@ export type Subject<T> = {
   unsubscribe: Noop;
 } & Observer<T>;
 
-export default function createSubject<T>(): Subject<T> {
+export default <T>(): Subject<T> => {
   let _observers: Observer<T>[] = [];
 
   const next = (value: T) => {
     for (const observer of _observers) {
-      observer.next(value);
+      observer.next && observer.next(value);
     }
   };
 
@@ -44,4 +44,4 @@ export default function createSubject<T>(): Subject<T> {
     subscribe,
     unsubscribe,
   };
-}
+};

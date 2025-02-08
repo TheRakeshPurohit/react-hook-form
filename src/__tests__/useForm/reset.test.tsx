@@ -1,23 +1,20 @@
 import React from 'react';
 import {
-  act as actComponent,
+  act,
   fireEvent,
   render,
+  renderHook,
   screen,
   waitFor,
 } from '@testing-library/react';
-import { act, renderHook } from '@testing-library/react-hooks';
 
 import { Controller } from '../../controller';
-import {
-  Control,
-  NestedValue,
-  UseFormRegister,
-  UseFormReturn,
-} from '../../types';
+import { Control, UseFormRegister, UseFormReturn } from '../../types';
 import { useController } from '../../useController';
 import { useFieldArray } from '../../useFieldArray';
 import { useForm } from '../../useForm';
+import { useWatch } from '../../useWatch';
+import noop from '../../utils/noop';
 
 jest.useFakeTimers();
 
@@ -35,8 +32,8 @@ describe('reset', () => {
           test: 'data',
         });
       })({
-        preventDefault: () => {},
-        persist: () => {},
+        preventDefault: noop,
+        persist: noop,
       } as React.SyntheticEvent);
     });
 
@@ -47,7 +44,7 @@ describe('reset', () => {
 
   it('should reset form value', () => {
     let methods: any;
-    const Component = () => {
+    const App = () => {
       methods = useForm<{
         test: string;
       }>();
@@ -57,9 +54,9 @@ describe('reset', () => {
         </form>
       );
     };
-    render(<Component />);
+    render(<App />);
 
-    actComponent(() =>
+    act(() =>
       methods.reset({
         test: 'test',
       }),
@@ -70,10 +67,41 @@ describe('reset', () => {
     });
   });
 
+  it('should reset the form with callback action', () => {
+    const App = () => {
+      const { register, reset } = useForm({
+        defaultValues: {
+          test: '',
+        },
+      });
+
+      React.useEffect(() => {
+        reset((formValues) => {
+          return {
+            ...formValues,
+            test: 'test',
+          };
+        });
+      }, [reset]);
+
+      return (
+        <form>
+          <input {...register('test')} />
+        </form>
+      );
+    };
+
+    render(<App />);
+
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toEqual(
+      'test',
+    );
+  });
+
   it('should set array value of multiple checkbox inputs correctly', async () => {
-    const Component = () => {
+    const App = () => {
       const { register } = useForm<{
-        test: NestedValue<string[]>;
+        test: string[];
       }>({
         defaultValues: {
           test: ['1', '2'],
@@ -88,15 +116,13 @@ describe('reset', () => {
       );
     };
 
-    render(<Component />);
+    render(<App />);
 
-    actComponent(() => {
-      screen
-        .getAllByRole('checkbox')
-        .forEach((checkbox) =>
-          expect((checkbox as HTMLInputElement).checked).toBeTruthy(),
-        );
-    });
+    screen
+      .getAllByRole('checkbox')
+      .forEach((checkbox) =>
+        expect((checkbox as HTMLInputElement).checked).toBeTruthy(),
+      );
   });
 
   it('should reset the form if ref is HTMLElement and parent element is not form', async () => {
@@ -104,15 +130,15 @@ describe('reset', () => {
     let methods: UseFormReturn<{
       test: string;
     }>;
-    const Component = () => {
+    const App = () => {
       methods = useForm<{
         test: string;
       }>();
       return <input {...methods.register('test')} />;
     };
-    render(<Component />);
+    render(<App />);
 
-    actComponent(() => methods.reset());
+    act(() => methods.reset());
 
     expect(mockReset).not.toHaveBeenCalled();
   });
@@ -158,7 +184,7 @@ describe('reset', () => {
   });
 
   it('should not reset form values when keepValues is specified', () => {
-    const Component = () => {
+    const App = () => {
       const { register, reset } = useForm();
 
       return (
@@ -178,7 +204,7 @@ describe('reset', () => {
       );
     };
 
-    render(<Component />);
+    render(<App />);
 
     fireEvent.change(screen.getByRole('textbox'), {
       target: {
@@ -193,8 +219,8 @@ describe('reset', () => {
     );
   });
 
-  it('should not reset form defaultValues when keepDefaultValues is specified', () => {
-    const Component = () => {
+  it('should not reset form defaultValues when keepDefaultValues is specified', async () => {
+    const App = () => {
       const {
         register,
         reset,
@@ -223,7 +249,7 @@ describe('reset', () => {
       );
     };
 
-    render(<Component />);
+    render(<App />);
 
     fireEvent.change(screen.getByRole('textbox'), {
       target: {
@@ -243,9 +269,7 @@ describe('reset', () => {
       },
     });
 
-    act(() => {
-      screen.getByText('dirty');
-    });
+    expect(await screen.findByText('dirty')).toBeVisible();
 
     fireEvent.change(screen.getByRole('textbox'), {
       target: {
@@ -253,7 +277,7 @@ describe('reset', () => {
       },
     });
 
-    expect(screen.queryByText('dirty')).toBeNull();
+    expect(screen.queryByText('dirty')).not.toBeInTheDocument();
   });
 
   it('should update dirty and dirtyFields when keepDefaultValues and updatedValues is provided', async () => {
@@ -297,14 +321,13 @@ describe('reset', () => {
 
     fireEvent.click(screen.getByRole('button'));
 
-    await waitFor(() => {
-      screen.getByText('dirty');
-      screen.getByText('{"firstName":true}');
-    });
+    expect(await screen.findByText('dirty')).toBeVisible();
+    expect(screen.getByText('{"firstName":true}')).toBeVisible();
   });
 
   it('should not reset if keepStateOption is specified', async () => {
     let formState = {};
+    const onSubmit = jest.fn();
 
     const App = () => {
       const {
@@ -321,7 +344,7 @@ describe('reset', () => {
       formState = { touchedFields, errors, isDirty };
 
       return (
-        <form onSubmit={handleSubmit(() => {})}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <input {...register('test', { required: true, minLength: 3 })} />
           <button>submit</button>
           <button
@@ -332,8 +355,8 @@ describe('reset', () => {
                   keepErrors: true,
                   keepDirty: true,
                   keepIsSubmitted: true,
+                  keepIsSubmitSuccessful: true,
                   keepTouched: true,
-                  keepIsValid: true,
                   keepSubmitCount: true,
                 },
               );
@@ -348,75 +371,41 @@ describe('reset', () => {
 
     render(<App />);
 
-    await actComponent(async () => {
-      fireEvent.change(screen.getByRole('textbox'), {
-        target: {
-          value: 'test',
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: {
+        value: 'test',
+      },
+    });
+
+    fireEvent.blur(screen.getByRole('textbox'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'submit' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(formState).toEqual({
+        errors: {},
+        isDirty: true,
+        touchedFields: {
+          test: true,
         },
-      });
+      }),
+    );
 
-      fireEvent.blur(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'reset' }));
 
-      fireEvent.click(screen.getByRole('button', { name: 'submit' }));
-    });
-
-    expect(formState).toMatchSnapshot();
-
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'reset' }));
-    });
-
-    expect(formState).toMatchSnapshot();
-  });
-
-  it('should keep isValid state when keep option is presented', async () => {
-    const App = () => {
-      const {
-        register,
-        reset,
-        formState: { isValid },
-      } = useForm({
-        mode: 'onChange',
-      });
-
-      return (
-        <>
-          <input {...register('test', { required: true })} />
-          {isValid ? 'valid' : 'invalid'}
-          <button
-            onClick={() => {
-              reset(
-                {
-                  test: 'test',
-                },
-                {
-                  keepIsValid: true,
-                },
-              );
-            }}
-          >
-            reset
-          </button>
-        </>
-      );
-    };
-
-    render(<App />);
-
-    await waitFor(() => {
-      screen.getByText('invalid');
-    });
-
-    fireEvent.click(screen.getByRole('button'));
-
-    await waitFor(() => {
-      screen.getByText('invalid');
+    expect(formState).toEqual({
+      errors: {},
+      isDirty: true,
+      touchedFields: {
+        test: true,
+      },
     });
   });
 
   it('should reset field array fine with empty value', async () => {
     let data: unknown;
-    const Component = () => {
+    const App = () => {
       const { control, register, reset, handleSubmit } = useForm<{
         test: {
           firstName: string;
@@ -464,25 +453,24 @@ describe('reset', () => {
       );
     };
 
-    render(<Component />);
+    render(<App />);
 
-    screen.getByRole('button', { name: 'reset' }).click();
+    const resetButton = screen.getByRole('button', { name: 'reset' });
+    const submitButton = screen.getByRole('button', { name: 'submit' });
 
-    await actComponent(async () => {
-      screen.getByRole('button', { name: 'submit' }).click();
-    });
+    fireEvent.click(resetButton);
+    fireEvent.click(submitButton);
 
-    await expect(data).toEqual({});
+    await waitFor(() => expect(data).toEqual({}));
 
-    screen.getByRole('button', { name: 'reset with value' }).click();
+    fireEvent.click(screen.getByRole('button', { name: 'reset with value' }));
+    fireEvent.click(submitButton);
 
-    await actComponent(async () => {
-      screen.getByRole('button', { name: 'submit' }).click();
-    });
-
-    await expect(data).toEqual({
-      test: [{ firstName: 'test', lastName: 'test' }],
-    });
+    await waitFor(() =>
+      expect(data).toEqual({
+        test: [{ firstName: 'test', lastName: 'test' }],
+      }),
+    );
   });
 
   it('should return reset nested value', () => {
@@ -518,7 +506,35 @@ describe('reset', () => {
 
     fireEvent.click(screen.getByRole('button'));
 
-    expect(getValuesResult).toMatchSnapshot();
+    expect(getValuesResult).toEqual([
+      {
+        names: [
+          {
+            name: 'test',
+          },
+        ],
+      },
+      {
+        names: [
+          {
+            name: 'Bill',
+          },
+          {
+            name: 'Luo',
+          },
+        ],
+      },
+      {
+        names: [
+          {
+            name: 'Bill',
+          },
+          {
+            name: 'Luo',
+          },
+        ],
+      },
+    ]);
   });
 
   it('should keep defaultValues after reset with shouldKeepDefaultValues', async () => {
@@ -559,9 +575,7 @@ describe('reset', () => {
       target: { value: 'data' },
     });
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
+    fireEvent.click(screen.getByRole('button'));
 
     expect(
       (screen.getAllByRole('textbox')[0] as HTMLInputElement).value,
@@ -569,6 +583,374 @@ describe('reset', () => {
     expect(
       (screen.getAllByRole('textbox')[1] as HTMLInputElement).value,
     ).toEqual('test1');
+  });
+
+  describe('when reset optional props set to keepDirtyValues', () => {
+    describe('with uncontrolled components', () => {
+      let updatedDirtyFields: Record<string, boolean> = {};
+      let updatedDirty = false;
+      let submittedValue: unknown = {};
+
+      function App() {
+        const [showButton, setShowButton] = React.useState(false);
+        const {
+          reset,
+          register,
+          handleSubmit,
+          formState: { dirtyFields, isDirty },
+        } = useForm();
+
+        updatedDirtyFields = dirtyFields;
+        updatedDirty = isDirty;
+
+        React.useEffect(() => {
+          setTimeout(() => {
+            reset(
+              {
+                firstName: 'bill',
+                lastName: 'luo',
+              },
+              { keepDirtyValues: true },
+            );
+            setShowButton(true);
+          }, 500);
+        }, [reset]);
+
+        return (
+          <form
+            onSubmit={handleSubmit((data) => {
+              submittedValue = data;
+            })}
+          >
+            <input {...register('firstName')} placeholder="First Name" />
+            <input {...register('lastName')} placeholder="Last Name" />
+
+            {showButton && (
+              <button
+                type="button"
+                onClick={() => {
+                  reset();
+                }}
+              >
+                reset
+              </button>
+            )}
+            <button>submit</button>
+          </form>
+        );
+      }
+
+      it('should only update new reset values', async () => {
+        render(<App />);
+
+        await waitFor(() =>
+          expect(
+            (screen.getByPlaceholderText('First Name') as HTMLInputElement)
+              .value,
+          ).toEqual('bill'),
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'reset' }));
+
+        expect(updatedDirtyFields).toEqual({});
+        expect(updatedDirty).toBeFalsy();
+
+        expect(
+          (screen.getByPlaceholderText('First Name') as HTMLInputElement).value,
+        ).toEqual('bill');
+
+        expect(updatedDirtyFields).toEqual({});
+        expect(updatedDirty).toBeFalsy();
+
+        fireEvent.click(screen.getByRole('button', { name: 'submit' }));
+
+        await waitFor(() =>
+          expect(submittedValue).toEqual({
+            firstName: 'bill',
+            lastName: 'luo',
+          }),
+        );
+      });
+
+      it('should only update none dirty fields and keep other values updated', async () => {
+        render(<App />);
+
+        fireEvent.change(screen.getByPlaceholderText('First Name'), {
+          target: {
+            value: 'test',
+          },
+        });
+
+        await waitFor(() =>
+          expect(
+            (screen.getByPlaceholderText('Last Name') as HTMLInputElement)
+              .value,
+          ).toEqual('luo'),
+        );
+
+        expect(updatedDirtyFields).toEqual({
+          firstName: true,
+        });
+        expect(updatedDirty).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('button', { name: 'submit' }));
+
+        await waitFor(() =>
+          expect(submittedValue).toEqual({
+            firstName: 'test',
+            lastName: 'luo',
+          }),
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'reset' }));
+
+        expect(
+          (screen.getByPlaceholderText('First Name') as HTMLInputElement).value,
+        ).toEqual('bill');
+
+        expect(updatedDirtyFields).toEqual({});
+        expect(updatedDirty).toBeFalsy();
+
+        fireEvent.click(screen.getByRole('button', { name: 'submit' }));
+
+        await waitFor(() =>
+          expect(submittedValue).toEqual({
+            firstName: 'bill',
+            lastName: 'luo',
+          }),
+        );
+      });
+
+      it('should treat previously-undirty fields as dirty when keepDefaultValues is set', async () => {
+        let updatedDirtyFields: Record<string, boolean> = {};
+        let updatedDirty = false;
+
+        function App() {
+          const {
+            reset,
+            register,
+            handleSubmit,
+            formState: { dirtyFields, isDirty },
+          } = useForm({ defaultValues: { firstName: '', lastName: '' } });
+
+          function resetKeepDefaults() {
+            reset(
+              {
+                firstName: 'bill',
+                lastName: 'luo',
+              },
+              {
+                keepDefaultValues: true,
+                keepDirtyValues: true,
+              },
+            );
+          }
+
+          updatedDirtyFields = dirtyFields;
+          updatedDirty = isDirty;
+
+          return (
+            <form
+              onSubmit={handleSubmit((data) => {
+                submittedValue = data;
+              })}
+            >
+              <input {...register('firstName')} placeholder="First Name" />
+              <input {...register('lastName')} placeholder="Last Name" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  resetKeepDefaults();
+                }}
+              >
+                reset keep defaults
+              </button>
+              <button>submit</button>
+            </form>
+          );
+        }
+
+        render(<App />);
+
+        fireEvent.click(
+          screen.getByRole('button', { name: 'reset keep defaults' }),
+        );
+
+        await waitFor(() =>
+          expect(
+            (screen.getByPlaceholderText('Last Name') as HTMLInputElement)
+              .value,
+          ).toEqual('luo'),
+        );
+
+        expect(
+          (screen.getByPlaceholderText('First Name') as HTMLInputElement).value,
+        ).toEqual('bill');
+
+        // Both fields were updated, the defaults were kept, so both should be dirty
+        expect(updatedDirtyFields).toEqual({
+          firstName: true,
+          lastName: true,
+        });
+
+        expect(updatedDirty).toBeTruthy();
+      });
+    });
+
+    describe('with controlled components', () => {
+      let updatedDirtyFields: Record<string, boolean> = {};
+      let updatedDirty = false;
+      let submittedValue: unknown = {};
+
+      function App() {
+        const [showButton, setShowButton] = React.useState(false);
+        const {
+          reset,
+          control,
+          handleSubmit,
+          formState: { dirtyFields, isDirty },
+        } = useForm({
+          defaultValues: {
+            firstName: '',
+            lastName: '',
+          },
+        });
+
+        updatedDirtyFields = dirtyFields;
+        updatedDirty = isDirty;
+
+        React.useEffect(() => {
+          setTimeout(() => {
+            reset(
+              {
+                firstName: 'bill',
+                lastName: 'luo',
+              },
+              { keepDirtyValues: true },
+            );
+            setShowButton(true);
+          }, 500);
+        }, [reset]);
+
+        return (
+          <form
+            onSubmit={handleSubmit((data) => {
+              submittedValue = data;
+            })}
+          >
+            <Controller
+              control={control}
+              render={({ field }) => {
+                return <input {...field} placeholder="First Name" />;
+              }}
+              name={'firstName'}
+            />
+            <Controller
+              control={control}
+              render={({ field }) => {
+                return <input {...field} placeholder="Last Name" />;
+              }}
+              name={'lastName'}
+            />
+
+            {showButton && (
+              <button
+                type="button"
+                onClick={() => {
+                  reset();
+                }}
+              >
+                reset
+              </button>
+            )}
+
+            <button>submit</button>
+          </form>
+        );
+      }
+
+      it('should only update new reset values', async () => {
+        render(<App />);
+
+        await waitFor(() =>
+          expect(
+            (screen.getByPlaceholderText('First Name') as HTMLInputElement)
+              .value,
+          ).toEqual('bill'),
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'reset' }));
+
+        expect(updatedDirtyFields).toEqual({});
+        expect(updatedDirty).toBeFalsy();
+
+        expect(
+          (screen.getByPlaceholderText('First Name') as HTMLInputElement).value,
+        ).toEqual('bill');
+
+        expect(updatedDirtyFields).toEqual({});
+        expect(updatedDirty).toBeFalsy();
+
+        fireEvent.click(screen.getByRole('button', { name: 'submit' }));
+
+        await waitFor(() =>
+          expect(submittedValue).toEqual({
+            firstName: 'bill',
+            lastName: 'luo',
+          }),
+        );
+      });
+
+      it('should only update none dirty fields and keep other values updated', async () => {
+        render(<App />);
+
+        fireEvent.change(screen.getByPlaceholderText('First Name'), {
+          target: {
+            value: 'test',
+          },
+        });
+
+        await waitFor(() =>
+          expect(
+            (screen.getByPlaceholderText('Last Name') as HTMLInputElement)
+              .value,
+          ).toEqual('luo'),
+        );
+
+        expect(updatedDirtyFields).toEqual({
+          firstName: true,
+        });
+        expect(updatedDirty).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('button', { name: 'submit' }));
+
+        await waitFor(() =>
+          expect(submittedValue).toEqual({
+            firstName: 'test',
+            lastName: 'luo',
+          }),
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'reset' }));
+
+        expect(
+          (screen.getByPlaceholderText('First Name') as HTMLInputElement).value,
+        ).toEqual('bill');
+
+        expect(updatedDirtyFields).toEqual({});
+        expect(updatedDirty).toBeFalsy();
+
+        fireEvent.click(screen.getByRole('button', { name: 'submit' }));
+
+        await waitFor(() =>
+          expect(submittedValue).toEqual({
+            firstName: 'bill',
+            lastName: 'luo',
+          }),
+        );
+      });
+    });
   });
 
   it('should allow to reset unmounted field array', () => {
@@ -684,19 +1066,13 @@ describe('reset', () => {
 
     render(<App />);
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'submit' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'submit' }));
 
     expect(submittedData).toEqual({});
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'reset' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'reset' }));
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'submit' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'submit' }));
 
     expect(submittedData).toEqual({});
   });
@@ -753,7 +1129,7 @@ describe('reset', () => {
       const [show, setShow] = React.useState(true);
 
       return (
-        <form onSubmit={handleSubmit(() => {})}>
+        <form onSubmit={handleSubmit(noop)}>
           <input {...register('firstName')} placeholder="First Name" />
           {show && <input {...register('lastName')} placeholder="Last Name" />}
           <button
@@ -800,7 +1176,7 @@ describe('reset', () => {
     const App = () => {
       const { control, reset } = useForm();
 
-      mounted.push(control._stateFlags.mount);
+      mounted.push(control._state.mount);
 
       React.useEffect(() => {
         reset({});
@@ -816,6 +1192,7 @@ describe('reset', () => {
 
   it('should update isMounted when isValid is subscribed', async () => {
     const mounted: unknown[] = [];
+    let tempControl: Control = {} as Control;
 
     const App = () => {
       const {
@@ -824,7 +1201,8 @@ describe('reset', () => {
         formState: { isValid },
       } = useForm();
 
-      mounted.push(control._stateFlags.mount);
+      mounted.push(control._state.mount);
+      tempControl = control;
 
       React.useEffect(() => {
         reset({});
@@ -839,11 +1217,11 @@ describe('reset', () => {
 
     render(<App />);
 
-    await waitFor(() => {
-      screen.getByText('false');
-    });
+    expect(await screen.findByText('false')).toBeVisible();
 
-    expect(mounted).toEqual([false, false, true]);
+    expect(mounted).toEqual([false, false]);
+
+    expect(tempControl._state.mount).toBeTruthy();
   });
 
   it('should reset values but keep defaultValues', async () => {
@@ -885,15 +1263,15 @@ describe('reset', () => {
 
     fireEvent.click(screen.getByRole('button'));
 
-    await waitFor(() => {
-      expect(
-        (screen.getAllByRole('textbox')[0] as HTMLInputElement).value,
-      ).toEqual('changed1');
-      expect(
-        (screen.getAllByRole('textbox')[1] as HTMLInputElement).value,
-      ).toEqual('changed2');
-      screen.getByText('{"test":"test","test1":"test1"}');
-    });
+    expect(
+      await screen.findByText('{"test":"test","test1":"test1"}'),
+    ).toBeVisible();
+    expect(
+      (screen.getAllByRole('textbox')[0] as HTMLInputElement).value,
+    ).toEqual('changed1');
+    expect(
+      (screen.getAllByRole('textbox')[1] as HTMLInputElement).value,
+    ).toEqual('changed2');
   });
 
   it('should reset field array async', () => {
@@ -959,7 +1337,7 @@ describe('reset', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'reset' }));
 
-    actComponent(() => {
+    act(() => {
       jest.advanceTimersByTime(100);
     });
 
@@ -1031,16 +1409,16 @@ describe('reset', () => {
       target: { value: '3' },
     });
 
-    screen.getByText(/yes/i);
-    screen.getByText(
-      `{"something":true,"test":[{"firstName":true,"lastName":true}]}`,
-    );
+    expect(screen.getByText(/yes/i)).toBeVisible();
+    expect(
+      screen.getByText(
+        `{"something":true,"test":[{"firstName":true,"lastName":true}]}`,
+      ),
+    ).toBeVisible();
 
-    await actComponent(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
+    fireEvent.click(screen.getByRole('button'));
 
-    screen.getByText(/no/i);
+    expect(await screen.findByText(/no/i)).toBeVisible();
 
     expect(
       (screen.getAllByRole('textbox')[0] as HTMLInputElement).value,
@@ -1051,5 +1429,259 @@ describe('reset', () => {
     expect(
       (screen.getAllByRole('textbox')[2] as HTMLInputElement).value,
     ).toEqual('3');
+  });
+
+  it('should keep isSubmitted and isSubmitSuccessful value when flags are set', async () => {
+    const { result } = renderHook(() => useForm<{ test: string }>());
+
+    expect(result.current.formState.isSubmitted).toBeFalsy();
+    expect(result.current.formState.isSubmitSuccessful).toBeFalsy();
+
+    await act(() =>
+      result.current.reset(undefined, {
+        keepIsSubmitted: true,
+        keepIsSubmitSuccessful: true,
+      }),
+    );
+    expect(result.current.formState.isSubmitted).toBeFalsy();
+    expect(result.current.formState.isSubmitSuccessful).toBeFalsy();
+
+    result.current.register('test');
+    result.current.setValue('test', 'data');
+
+    await act(async () => {
+      await result.current.handleSubmit((data) => {
+        expect(data).toEqual({
+          test: 'data',
+        });
+      })({
+        preventDefault: noop,
+        persist: noop,
+      } as React.SyntheticEvent);
+    });
+
+    expect(result.current.formState.isSubmitted).toBeTruthy();
+    expect(result.current.formState.isSubmitSuccessful).toBeTruthy();
+
+    act(() =>
+      result.current.reset(undefined, {
+        keepIsSubmitted: true,
+        keepIsSubmitSuccessful: true,
+      }),
+    );
+
+    expect(result.current.formState.isSubmitted).toBeTruthy();
+    expect(result.current.formState.isSubmitSuccessful).toBeTruthy();
+  });
+
+  it('should keep track on updated defaultValues', async () => {
+    function App() {
+      const {
+        handleSubmit,
+        reset,
+        formState: { defaultValues },
+      } = useForm({
+        defaultValues: { firstName: 'Bill', lastName: 'Luo' },
+      });
+
+      return (
+        <form
+          onSubmit={handleSubmit(() => {
+            reset({ firstName: 'Bill1', lastName: 'Luo1' });
+          })}
+        >
+          <button>Submit</button>
+          <p>{defaultValues?.firstName}</p>
+          <p>{defaultValues?.lastName}</p>
+        </form>
+      );
+    }
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Bill1')).toBeVisible();
+      expect(screen.getByText('Luo1')).toBeVisible();
+    });
+  });
+
+  it('should return defaultValues in useWatch and watch when using calling reset with empty object', async () => {
+    const defaultValues = {
+      something: 'anything',
+    };
+
+    function App() {
+      const { control, reset, register, watch } = useForm({
+        defaultValues,
+      });
+      const watchValue = watch('something');
+      const useWatchValue = useWatch({
+        control,
+        name: 'something',
+      });
+
+      return (
+        <form>
+          <input {...register('something')} />
+          <button
+            type="button"
+            onClick={() => {
+              reset({});
+            }}
+          >
+            reset
+          </button>
+          <p>watch: {watchValue}</p>
+          <p>useWatch: {useWatchValue}</p>
+        </form>
+      );
+    }
+
+    render(<App />);
+
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: '1' },
+    });
+
+    expect(screen.getByText('watch: 1')).toBeVisible();
+    expect(screen.getByText('useWatch: 1')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(screen.getByText('watch: anything')).toBeVisible();
+    expect(screen.getByText('useWatch: anything')).toBeVisible();
+  });
+
+  it('should keep mounted value after reset with keep dirty values', async () => {
+    function App() {
+      const {
+        getValues,
+        reset,
+        register,
+        formState: { isValid },
+      } = useForm({
+        mode: 'onChange',
+      });
+
+      return (
+        <form>
+          <input
+            {...register('value', { required: true })}
+            defaultValue="Any default value!"
+          />
+          <p>{getValues().test}</p>
+          <p>isValid = {isValid ? 'true' : 'false'}</p>
+          <button
+            type="button"
+            onClick={() => reset({ test: '34' }, { keepDirtyValues: true })}
+          >
+            reset
+          </button>
+        </form>
+      );
+    }
+
+    render(<App />);
+
+    expect(await screen.findByText('isValid = true')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      screen.getByText('34');
+    });
+  });
+
+  it('should keep dirty array value after reset with keepDirtyValues', async () => {
+    function App() {
+      const {
+        getValues,
+        reset,
+        setValue,
+        formState: { isDirty },
+      } = useForm<{
+        array: string[];
+      }>({
+        mode: 'onChange',
+        defaultValues: {
+          array: [],
+        },
+      });
+
+      return (
+        <form>
+          <input defaultValue="users#0" />
+          <p>{`users#${getValues().array.length}`}</p>
+          <p>isDirty = {isDirty ? 'true' : 'false'}</p>
+          <button
+            data-testid="dirtyButton"
+            type="button"
+            onClick={() => setValue('array', ['1'], { shouldDirty: true })}
+          >
+            dirty
+          </button>
+          <button
+            data-testid="resetButton"
+            type="button"
+            onClick={() => reset({ array: [] }, { keepDirtyValues: true })}
+          >
+            reset
+          </button>
+        </form>
+      );
+    }
+
+    render(<App />);
+
+    expect(await screen.findByText('isDirty = false')).toBeVisible();
+    await waitFor(() => {
+      screen.getByText('users#0');
+    });
+
+    fireEvent.click(screen.getByTestId('dirtyButton'));
+    expect(await screen.findByText('isDirty = true')).toBeVisible();
+    await waitFor(() => {
+      screen.getByText('users#1');
+    });
+
+    fireEvent.click(screen.getByTestId('resetButton'));
+
+    await waitFor(() => {
+      screen.getByText('users#1');
+    });
+  });
+
+  it('should not mutate data outside of library', () => {
+    const defaultValues = {
+      test: 'ok',
+    };
+
+    const App = () => {
+      const { register, reset, resetField } = useForm();
+
+      return (
+        <form>
+          <input {...register('test')} />
+          <button type="button" onClick={() => reset(defaultValues)}>
+            reset
+          </button>
+          <button
+            type="button"
+            onClick={() => resetField('test', { defaultValue: 'error' })}
+          >
+            resetField
+          </button>
+        </form>
+      );
+    };
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'reset' }));
+    fireEvent.click(screen.getByRole('button', { name: 'resetField' }));
+
+    expect(defaultValues.test).toBe('ok');
   });
 });
